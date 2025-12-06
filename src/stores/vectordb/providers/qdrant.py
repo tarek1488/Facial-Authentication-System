@@ -1,5 +1,5 @@
-from VectorDBInterface import VectorDBInterface
-from VectorDBEnums import VectorDBMetricMethod
+from ..VectorDBInterface import VectorDBInterface
+from ..VectorDBEnums import VectorDBMetricMethod
 from qdrant_client import QdrantClient, models
 from logging import Logger
 from models.db_schemes import RetrievedVectorDBdata

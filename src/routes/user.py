@@ -54,3 +54,17 @@ async def register_client(
     
     return JSONResponse(content={"repsonse signal" : ResponseSignal.CLIENT_ADD_SUCCESS.value,
                                  "Client ID": str(client_record.id)})
+    
+
+@client_router.post("/proccess_client_image/{client_id}")
+async def register_client(
+    request: Request, client_id: str, app_settings = Depends(get_settings)):
+    
+    db_client = request.app.mongo_db
+    client_data_model = await ClientDataModel.initialize_client_model(db_client=db_client)
+    
+    client =  await client_data_model.get_client_by_client_id(client_id=client_id)
+    
+    image_path = client.client_image_path
+    
+    return JSONResponse(content={"Client image": image_path})
