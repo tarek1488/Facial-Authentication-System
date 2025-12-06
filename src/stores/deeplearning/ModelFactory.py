@@ -9,7 +9,6 @@ class ModelProviderFactory:
     def intialize_provider(self, provider_name: str):
         
         if provider_name == ModelProviderEnum.DEEPFACE.value:
-            
             provider = DeepFaceProvider()
             return provider
         

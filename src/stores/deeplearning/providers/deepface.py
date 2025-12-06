@@ -20,9 +20,9 @@ class DeepFaceProvider(ModelInterface):
         
 
     def embed_image(self, image_path: str):
-        if self.model_name == None or self.detector_backend ==None:
+        if self.model_name == None or self.detector_backend == None:
             return None
-        
+        #print(100*"hello")
         out = DeepFace.represent(img_path = image_path, model_name= self.model_name,
                                     detector_backend = self.detector_backend, align = True)
         

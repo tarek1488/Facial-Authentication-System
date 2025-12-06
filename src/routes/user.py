@@ -78,7 +78,10 @@ async def proccess_client_image(
                                                embedding_client=face_model_client)
     
     
-    meta_data = client.model_dump()
+    #meta_data = client.model_dump()
+    meta_data = {"client_id" : client.client_id,
+                 "client_image_path": client.client_image_path,
+                 "client_name":client.client_name}
     return_val = embedding_controller.push_image_to_vector_db(image_path=image_path,
                                                               meta_data=meta_data)
     

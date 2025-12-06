@@ -18,13 +18,14 @@ async def lifespan(app: FastAPI):
     # Intialize face model factory
     model_factory = ModelProviderFactory(config=settings)
     model_provider_client = model_factory.intialize_provider(settings.EMBEDDING_MODEL_PROVIDER)
+    _ = model_provider_client.set_embedding_model(model_name = settings.EMBEDDING_MODEL_NAME,
+                                                              detector_backend = settings.DETECTION_BACKEND)
     
     # Retrieve vector db client
     app.vector_db_client = vector_db_factory.intialize_provider(provider_name=settings.VECTORDB_PROVIDER)
     
     # Retrieve face model client
-    app.face_model_client = model_provider_client.set_embedding_model(model_name = settings.EMBEDDING_MODEL_NAME ,
-                                                              detector_backend = settings.DETECTION_BACKEND) 
+    app.face_model_client =  model_provider_client
     
     
     # connect to vector db client 

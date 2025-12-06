@@ -34,9 +34,9 @@ class VectorDBInterface(ABC):
         pass
     
     
-    @abstractmethod
-    def search_by_vector(self, collection_name: str, vector: list, limit:int = 3):
-        pass
+    # @abstractmethod
+    # def search_by_vector(self, collection_name: str, vector: list, limit:int = 3):
+    #     pass
     
     
     

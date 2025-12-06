@@ -17,9 +17,8 @@ class EmbeddingController(BaseController):
             return None
         
         vector =  self.embedding_client.embed_image(image_path = image_path)
-        
+
         return_val = self.vector_db_client.insert_one_record(collection_name = collection_name,
-                                                             client_image_path = image_path,
                                                              vector = vector,
                                                              meta_data = meta_data)
         
