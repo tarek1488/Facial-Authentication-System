@@ -3,7 +3,7 @@ from typing import Optional
 from bson.objectid import ObjectId
 
 class Client(BaseModel):
-    id: Optional[ObjectId] = Field(None, alias="_id")
+    id: Optional[ObjectId] = Field(default_factory=ObjectId, alias="_id")
     client_id: str =  Field(..., min_length=1)
     client_name: str =  Field(..., min_length=1)
     client_image_path: str =  Field(..., min_length=1)

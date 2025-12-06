@@ -1,2 +1,3 @@
 from .ClientController import ClientController
 from .ImageController import ImageController
+from .EmbeddingController import EmbeddingController
