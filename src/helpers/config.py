@@ -10,6 +10,11 @@ class Settings(BaseSettings):
     MONGO_DB_URL: str
     MONGO_DB_DATABASE: str
     
+    EMBEDDING_MODEL_NAME: str
+    EMBEDDING_MODEL_SIZE: int
+    EMBEDDING_MODEL_PROVIDER: str
+    EMBEDDING_MODEL_STORE: str
+    
     VECTORDB_PROVIDER: str = None
     VECTORDB_PATH: str = None
     VECTORDB_DISTANCE_METHOD: str = None
