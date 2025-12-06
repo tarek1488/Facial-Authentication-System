@@ -7,5 +7,5 @@ class ModelInterface(ABC):
         pass
     
     @abstractmethod
-    def embed_image(self, image):
+    def embed_image(self, image_path: str):
         pass

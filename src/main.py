@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from helpers.config import get_settings
 from motor.motor_asyncio import AsyncIOMotorClient
 from stores.vectordb.VectorDBFactory import VectorDBFactory
+from stores.deeplearning.ModelFactory import ModelProviderFactory
 async def lifespan(app: FastAPI):
     # Getting the enviroments settings
     settings = get_settings()
@@ -11,11 +12,19 @@ async def lifespan(app: FastAPI):
     app.mongo_client = AsyncIOMotorClient(settings.MONGO_DB_URL)
     app.mongo_db = app.mongo_client.get_database(settings.MONGO_DB_DATABASE)
     
-    # Intialize Factroy
+    # Intialize vector db Factroy
     vector_db_factory =  VectorDBFactory(config=settings)
+    
+    # Intialize face model factory
+    model_factory = ModelProviderFactory(config=settings)
     
     # Retrieve vector db client
     app.vector_db_client = vector_db_factory.intialize_provider(provider_name=settings.VECTORDB_PROVIDER)
+    
+    # Retrieve face model client
+    app.face_model_client = model_factory.set_embedding_model(model_name = settings.EMBEDDING_MODEL_NAME ,
+                                                              detector_backend = settings.DETECTION_BACKEND) 
+    
     
     # connect to vector db client 
     app.vector_db_client.connect()
