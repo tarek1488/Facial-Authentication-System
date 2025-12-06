@@ -63,7 +63,7 @@ class Qdrant(VectorDBInterface):
         
     
     
-    def insert_one_record(self, collection_name: str, client_image_path: str, vector: list,
+    def insert_one_record(self, collection_name: str, vector: list,
                           meta_data: dict = None, record_id: int = None ):
         
         #check if collection exits or not
@@ -73,7 +73,7 @@ class Qdrant(VectorDBInterface):
         
         point =  models.PointStruct(
             id= [record_id],
-            payload= {"client_image_path" : client_image_path, "metadata": meta_data},
+            payload= {"metadata": meta_data},
             vector= vector
         )
         try:
@@ -84,44 +84,6 @@ class Qdrant(VectorDBInterface):
         
         return True
     
-    
-    def insert_many_records(self, collection_name: str, clients_images_paths: list, vectors:list,
-                            meta_datas: list = None, record_ids : list = None, batch_size: int = 50):
-        
-        #check if collection exits or not
-        if not self.is_Collection_exists(collection_name= collection_name):
-            self.logger.error("There is no such a collection exits with this name")
-            return None
-        
-        if meta_datas is None:
-            meta_datas = [None] * len(clients_images_paths)
-        
-        if record_ids is None:
-            record_ids  = list(range(0, len(clients_images_paths)))
-        
-        points = []
-        for i in range(0, len(clients_images_paths), batch_size):
-            batch_end = i + batch_size
-            
-            batch_clients_images_paths = clients_images_paths[i : batch_end]
-            batch_vectors = vectors[i : batch_end]
-            batch_metadatas = meta_datas[i : batch_end]
-            batch_record_ids =  record_ids[i : batch_end]
-            
-            batch_points = [
-                models.PointStruct(id = batch_record_ids[j],
-                    payload = {"client_image_path" : batch_clients_images_paths[j], "metadata" : batch_metadatas[j]},
-                    vector= batch_vectors[j]
-                )
-                for j in range(len(clients_images_paths))
-            ]
-            
-            try:
-                _ = self.client.upload_points(collection_name= collection_name, points=batch_points)
-            except Exception as e:
-                self.logger.error(f"Error while inserting batch: {e}")
-        
-        return True
     
     
     def search_by_vector(self, collection_name: str, vector: list, limit:int = 3):

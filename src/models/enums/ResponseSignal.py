@@ -11,4 +11,6 @@ class ResponseSignal(Enum):
     CLIENT_ADD_SUCCESS = "Client added successfully"
     LOADING_EMBEDDING_MODEL_FAIL = "Loading embedding model fail cheack model name"
     LOADING_EMBEDDING_MODEL_SUCCEED = "Loading embedding model succeed"
-    
+    NO_CLIENT_WITH_SUCH_ID = "No client with such id"
+    IMAGE_EMBEDDING_FAIL = "Image Embedding Fail"
+    IMAGE_ADDED_TO_VECTOR_DB_SUCCESS = "Image added to vector db"

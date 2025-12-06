@@ -7,3 +7,4 @@ motor == 3.7.1
 qdrant-client == 1.16.1
 aiofiles == 25.1.0
 deepface == 0.0.96
+tf-keras
