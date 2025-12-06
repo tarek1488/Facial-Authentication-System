@@ -13,15 +13,15 @@ class VectorDBInterface(ABC):
         pass
     
     @abstractmethod
-    def get_collection(self):
+    def get_collection(self, collection_name: str):
         pass
     
-    # @abstractmethod
-    # def get_all_collection(self):
-    #     pass
+    @abstractmethod
+    def is_collection_exists(self, collection_name: str):
+        pass
     
     @abstractmethod
-    def create_collection(self, collection_name: str, embedding_size: int, do_reset: bool = False):
+    def create_collection(self, collection_name: str, embedding_size: int):
         pass
     
     @abstractmethod
@@ -29,7 +29,7 @@ class VectorDBInterface(ABC):
         pass
     
     @abstractmethod
-    def insert_one_record(self, collection_name: str, text: str, vector: list,
+    def insert_one_record(self, collection_name: str, clieant_image_path: str, vector: list,
                           meta_data: dict = None, record_id: int = None ):
         pass
     
