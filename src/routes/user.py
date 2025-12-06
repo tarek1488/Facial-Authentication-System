@@ -34,6 +34,13 @@ async def register_client(
     #all images are vaild
     image_path, unique_fileID = image_controller.generate_unique_file_path(original_file_name=image1.filename,client_id=client_id)
     
+    
+    client_data_model = await ClientDataModel.initialize_client_model(db_client=db_client)
+    
+    client_record = await client_data_model.create_client(client= Client(client_name= client_name,
+                                                                   client_id= client_id,
+                                                                   client_image_path= image_path) )
+    
     try:
         async with aiofiles.open(image_path, 'wb') as f:
             while chunk := await image1.read(app_settings.IMAGE_CHUNK_SIZE):
@@ -43,12 +50,6 @@ async def register_client(
         return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST,
                             content={"response signal" : ResponseSignal.IMAGE_READ_FAIL.value})
     
-    
-    client_data_model = await ClientDataModel.initialize_client_model(db_client=db_client)
-    
-    client_record = await client_data_model.create_client(client= Client(client_name= client_name,
-                                                                   client_id= client_id,
-                                                                   client_image_path= image_path) )
     
     
     return JSONResponse(content={"repsonse signal" : ResponseSignal.CLIENT_ADD_SUCCESS.value,
