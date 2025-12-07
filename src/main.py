@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from routes import base, user
+from routes import base, user, authenticate
 from contextlib import asynccontextmanager
 from helpers.config import get_settings
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -39,3 +39,4 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.include_router(base.base_router)
 app.include_router(user.client_router)
+app.include_router(authenticate.authenticate_router)

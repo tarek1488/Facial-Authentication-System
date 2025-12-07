@@ -4,7 +4,6 @@ from typing import Optional
 
 
 class RetrievedVectorDBdata(BaseModel):
-    client_image_path: str
-    score: list
+    score: float
     meta_data: Optional[dict]    
     
