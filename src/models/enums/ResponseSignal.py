@@ -14,3 +14,4 @@ class ResponseSignal(Enum):
     NO_CLIENT_WITH_SUCH_ID = "No client with such id"
     IMAGE_EMBEDDING_FAIL = "Image Embedding Fail"
     IMAGE_ADDED_TO_VECTOR_DB_SUCCESS = "Image added to vector db"
+    CAMERA_FRAME_READ_FAIL = "Camera Frame reading fail"

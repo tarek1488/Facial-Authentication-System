@@ -4,6 +4,8 @@ from models.enums.ResponseSignal import ResponseSignal
 import re
 from .ClientController import ClientController
 import os
+import cv2
+import numpy as np
 class ImageController(BaseController):
     def __init__(self):
         super().__init__()
@@ -40,4 +42,14 @@ class ImageController(BaseController):
         
         cleaned_name = cleaned_name.replace(" ", "_") 
         
-        return cleaned_name    
+        return cleaned_name   
+    
+    def read_frame(self, file: UploadFile):
+        file_bytes = np.frombuffer(file.file.read(), np.uint8)
+        img = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        
+        if img is None:
+            return None
+        
+        return img 
