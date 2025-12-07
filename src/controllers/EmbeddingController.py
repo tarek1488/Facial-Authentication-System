@@ -1,13 +1,14 @@
 from .BaseController import BaseController
 import os
-
+from numpy.typing import NDArray
+import numpy as np
 class EmbeddingController(BaseController):
     def __init__(self, vector_db_client, embedding_client):
         super().__init__()
         self.vector_db_client = vector_db_client
         self.embedding_client = embedding_client
         
-    def push_image_to_vector_db(self, image_path: list, meta_data:dict):
+    def push_image_to_vector_db(self, image_path: str, meta_data:dict):
         collection_name =  self.app_settings.COLLECTION_NAME
         
         return_val =  self.vector_db_client.create_collection(collection_name = collection_name,
@@ -26,6 +27,24 @@ class EmbeddingController(BaseController):
             return None
         
         return True 
+    
+    def get_frame_query_embeddeing(self, image: NDArray[np.uint8] ):
+        vector =  self.embedding_client.embed_image(image_path = image)
+        
+        if vector != None:
+            return vector
+        
+        return None
+    
+    def search_data_base(self, vector: list, limit:int  = 1):
+        collection_name =  self.app_settings.COLLECTION_NAME
+        documents = self.vector_db_client.search_by_vector(collection_name = collection_name,
+                                                           vector= vector,
+                                                           limit = limit)
+        if not documents:
+            return None
+        
+        return documents
             
         
     

@@ -82,28 +82,33 @@ class Qdrant(VectorDBInterface):
 
         return True
 
-    # def search_by_vector(self, collection_name: str, vector: list, limit: int = 3):
-    #     try:
-    #         documents = self.client.search(
-    #             collection_name=collection_name,
-    #             query_vector=vector,
-    #             limit=limit
-    #         )
-    #     except Exception as e:
-    #         self.logger.error(f"Search error: {e}")
-    #         return None
+    def search_by_vector(self, collection_name: str, vector: list, limit: int = 1):
+        try:
+            # Do NOT wrap in [] or anything
+            response = self.client.query_points(
+                collection_name=collection_name,
+                query=vector,
+                limit=limit
+            )
+        except Exception as e:
+            self.logger.error(f"Search error: {e}")
+            return None
 
-    #     if not documents:
-    #         self.logger.info("No vector match found")
-    #         return None
+        points =  response.points
+        if not points:
+            self.logger.info("No vector match found")
+            return None
 
-    #     results = [
-    #         RetrievedVectorDBdata(
-    #             client_image_path=doc.payload.get("client_image_path"),
-    #             score=doc.score,
-    #             meta_data=doc.payload.get("metadata")
-    #         )
-    #         for doc in documents
-    #     ]
+        
+        # Each point here is a ScoredPoint
+        results = [
+            RetrievedVectorDBdata(
+                score=point.score,
+                meta_data=point.payload.get("metadata")  # payload is a dict
+            )
+            for point in points
+        ]
 
-    #     return results
+        return results
+
+
