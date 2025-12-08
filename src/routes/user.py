@@ -37,9 +37,15 @@ async def register_client(
     
     client_data_model = await ClientDataModel.initialize_client_model(db_client=db_client)
     
-    client_record = await client_data_model.create_client(client= Client(client_name= client_name,
+    try:
+        client_record = await client_data_model.create_client(client= Client(client_name= client_name,
                                                                    client_id= client_id,
                                                                    client_image_path= image_path) )
+    except Exception as e:
+        logger.error(f'Client database insersion error: {e}')
+        return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST,
+                            content={"response signal" : ResponseSignal.CLIENT_ADD_FAIL.value})
+        
     
     try:
         async with aiofiles.open(image_path, 'wb') as f:
