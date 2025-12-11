@@ -23,11 +23,13 @@ class DeepFaceProvider(ModelInterface):
         if self.model_name == None or self.detector_backend == None:
             return None
         
+        
         try:
             out = DeepFace.represent(img_path = image_path, model_name= self.model_name,
                                     detector_backend = self.detector_backend, align = True)
         except Exception as e:
             self.logger.error(f"Error in image embedding: {e}")
+            return None
         
         if len(out) == 0 or out == None or out[0]["embedding"] == None:
             return None
