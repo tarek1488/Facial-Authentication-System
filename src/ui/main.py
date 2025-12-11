@@ -21,6 +21,7 @@ camera_running = False
 frame_lock = threading.Lock()
 last_frame = None
 ui_queue = queue.Queue()
+AUTH_INTERVAL = 5  # seconds between automatic authentications
 
 # ==============================
 # CAMERA THREAD
@@ -163,9 +164,6 @@ class App:
         tk.Button(button_frame, text="Register", width=20,
                   command=self.on_register).grid(row=0, column=0, padx=5, pady=2)
 
-        tk.Button(button_frame, text="Authenticate", width=20,
-                  command=self.on_authenticate).grid(row=1, column=0, padx=5, pady=2)
-
         # ===== API Response Preview (Scrollable) =====
         tk.Label(self.right_frame, text="API Response:").pack(pady=(10, 0))
 
@@ -183,6 +181,9 @@ class App:
         # Start camera thread
         threading.Thread(target=camera_loop, daemon=True).start()
 
+        # Start regular authentication
+        self.schedule_authentication()
+
         # Update UI loop
         self.update_ui()
 
@@ -195,12 +196,13 @@ class App:
             return
         run_api_thread(register_client, name, client_id)
 
-    def on_authenticate(self):
+    # ---- AUTO AUTHENTICATION ----
+    def schedule_authentication(self):
         client_id = self.id_entry.get().strip()
-        if not client_id:
-            self.show_response("Error: Enter Client ID")
-            return
-        run_api_thread(authenticate_client, client_id)
+        if client_id:
+            run_api_thread(authenticate_client, client_id)
+        # schedule next authentication after AUTH_INTERVAL seconds
+        self.root.after(AUTH_INTERVAL * 1000, self.schedule_authentication)
 
     # ---- SHOW RESPONSE ----
     def show_response(self, msg):
