@@ -8,3 +8,4 @@ qdrant-client == 1.16.1
 aiofiles == 25.1.0
 deepface == 0.0.96
 tf-keras
+PyQt6 == 6.10.1

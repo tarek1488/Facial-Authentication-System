@@ -18,7 +18,7 @@ authenticate_router =  APIRouter(
 
 
 @authenticate_router.post("/authenticate")
-async def authenticate_client(request: Request, image1: UploadFile):
+async def authenticate_client(request: Request, image1: UploadFile =  File(...)):
     image_controller = ImageController()
     
     numpy_image = image_controller.read_frame(file=image1)
@@ -44,10 +44,10 @@ async def authenticate_client(request: Request, image1: UploadFile):
         
     # now we have a vector---> search database
     records = embedding_controller.search_data_base(vector=vector)
-    if records != None:
-        print(100*"#")
-        record = records[0]
+    if records == None:
+        return JSONResponse(content={"repsonse signal" : ResponseSignal.CLEINT_AUTHENTICATION_FAIL.value})
         
+    record = records[0]
     score = record.score
     meta_data =  record.meta_data
     

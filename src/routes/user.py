@@ -1,7 +1,7 @@
 from fastapi import FastAPI , APIRouter, Depends
 import os
 from helpers.config import get_settings, Settings
-from fastapi import FastAPI , APIRouter, Depends, UploadFile, status, Request, File
+from fastapi import FastAPI , APIRouter, Depends, UploadFile, status, Request, File, Form
 from fastapi.responses import JSONResponse
 from controllers import ClientController, ImageController, EmbeddingController
 import aiofiles
@@ -19,8 +19,7 @@ client_router =  APIRouter(
 
 @client_router.post("/register_client")
 async def register_client(
-    request: Request, client_name: str, client_id: str,
-    image1: UploadFile, app_settings = Depends(get_settings)):
+    request: Request, image1: UploadFile = File(...), client_name: str = Form(...), client_id: str = Form(...), app_settings = Depends(get_settings)):
     
     db_client = request.app.mongo_db
     

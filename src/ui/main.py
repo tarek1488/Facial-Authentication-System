@@ -1,399 +1,306 @@
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import messagebox
+from PIL import Image, ImageTk
 import cv2
-import threading
 import requests
-import io
+import threading
+import queue
 import time
+import sys
 
-# -------------------------
-# Configuration
-# -------------------------
+# ======================
+# API ENDPOINTS
+# ======================
 BASE_URL = "http://localhost:5000/api/v1"
 REGISTER_ENDPOINT = f"{BASE_URL}/client/register_client"
 PROCESS_ENDPOINT_TEMPLATE = f"{BASE_URL}/client/proccess_client_image/{{client_id}}"
 AUTH_ENDPOINT = f"{BASE_URL}/authenticate/authenticate"
 
-# How often (seconds) to send a frame for authentication when streaming continuously
-AUTH_SEND_INTERVAL = 1.5
-
-# How long (ms) to display recognized client info before resuming
-DISPLAY_MS_ON_RECOGNIZED = 3000
-
-# Webcam index (0 default)
-CAMERA_INDEX = 0
-
-# -------------------------
-# API Wrapper
-# -------------------------
-class ClientAPI:
-    def __init__(self, register_url=REGISTER_ENDPOINT, process_template=PROCESS_ENDPOINT_TEMPLATE, auth_url=AUTH_ENDPOINT):
-        self.register_url = register_url
-        self.process_template = process_template
-        self.auth_url = auth_url
-        self.session = requests.Session()
-
-    def _image_bytes_from_frame(self, frame_bgr):
-        """Encode BGR frame (numpy) to JPEG bytes."""
-        ret, buf = cv2.imencode('.jpg', frame_bgr)
-        if not ret:
-            raise ValueError("Failed to encode image to JPEG")
-        return io.BytesIO(buf.tobytes())
-
-    def register_client(self, client_name: str, client_id: str, frame_bgr) -> requests.Response:
-        """
-        POST multipart/form-data: 'client_name', 'client_id', 'image' file
-        Returns requests.Response
-        """
-        img_buffer = self._image_bytes_from_frame(frame_bgr)
-        files = {
-            "image": ("photo.jpg", img_buffer.getvalue(), "image/jpeg")
-        }
-        data = {
-            "client_name": client_name,
-            "client_id": client_id
-        }
-        resp = self.session.post(self.register_url, data=data, files=files, timeout=30)
-        return resp
-
-    def process_client_image(self, client_id: str) -> requests.Response:
-        """
-        POST to /proccess_client_image/{client_id} (no body expected)
-        """
-        url = self.process_template.format(client_id=client_id)
-        resp = self.session.post(url, timeout=30)
-        return resp
-
-    def authenticate(self, frame_bgr) -> requests.Response:
-        """
-        POST multipart/form-data with only image file to auth endpoint.
-        """
-        img_buffer = self._image_bytes_from_frame(frame_bgr)
-        files = {
-            "image": ("photo.jpg", img_buffer.getvalue(), "image/jpeg")
-        }
-        resp = self.session.post(self.auth_url, files=files, timeout=30)
-        return resp
-
-# -------------------------
-# Camera Controller
-# -------------------------
-class CameraController:
-    def __init__(self, index=CAMERA_INDEX):
-        self.index = index
-        self.cap = cv2.VideoCapture(self.index, cv2.CAP_DSHOW) if hasattr(cv2, 'CAP_DSHOW') else cv2.VideoCapture(self.index)
-        if not self.cap.isOpened():
-            raise RuntimeError(f"Cannot open camera index {self.index}")
-        # try to set a reasonable size
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-        self.lock = threading.Lock()
-
-    def read_frame(self):
-        with self.lock:
-            ret, frame = self.cap.read()
-            if not ret:
-                raise RuntimeError("Camera read failed")
-            return frame.copy()  # BGR numpy array
-
-    def release(self):
-        with self.lock:
-            if self.cap and self.cap.isOpened():
-                self.cap.release()
-
-# -------------------------
-# Tkinter GUI
-# -------------------------
-class GymApp(tk.Tk):
-    def __init__(self, api: ClientAPI, camera: CameraController):
-        super().__init__()
-        self.title("Gym Client - Registration & Authentication")
-        self.protocol("WM_DELETE_WINDOW", self.on_close)
-        self.api = api
-        self.camera = camera
-
-        # Tab control
-        self.notebook = ttk.Notebook(self)
-        self.auth_frame = ttk.Frame(self.notebook)
-        self.reg_frame = ttk.Frame(self.notebook)
-        self.notebook.add(self.auth_frame, text="Authentication (Live)")
-        self.notebook.add(self.reg_frame, text="Register Client")
-        self.notebook.pack(fill=tk.BOTH, expand=True)
-
-        # Shared attributes
-        self.current_photo_image = None  # keep reference for tkinter
-        self.streaming = True
-
-        # Authentication view
-        self._build_auth_view()
-
-        # Registration view
-        self._build_reg_view()
-
-        # Background auth sending control
-        self._last_auth_send = 0
-        self._auth_call_running = False
-        self._overlay_active = False
-
-        # Start update loop for camera frames
-        self.update_frame()
-
-    def _build_auth_view(self):
-        # Camera display
-        self.auth_canvas = tk.Label(self.auth_frame)
-        self.auth_canvas.pack(padx=8, pady=8)
-
-        # Status and controls
-        controls = ttk.Frame(self.auth_frame)
-        controls.pack(fill=tk.X, padx=8, pady=(0,8))
-
-        self.auth_status_var = tk.StringVar(value="Streaming...")
-        ttk.Label(controls, textvariable=self.auth_status_var).pack(side=tk.LEFT)
-
-        ttk.Button(controls, text="Pause Streaming", command=self.toggle_streaming).pack(side=tk.RIGHT)
-
-    def _build_reg_view(self):
-        frm = ttk.Frame(self.reg_frame, padding=12)
-        frm.pack(fill=tk.BOTH, expand=True)
-
-        # Name and ID fields
-        row = ttk.Frame(frm)
-        row.pack(fill=tk.X, pady=4)
-        ttk.Label(row, text="Client Name:", width=15).pack(side=tk.LEFT)
-        self.entry_name = ttk.Entry(row)
-        self.entry_name.pack(side=tk.LEFT, fill=tk.X, expand=True)
-
-        row2 = ttk.Frame(frm)
-        row2.pack(fill=tk.X, pady=4)
-        ttk.Label(row2, text="Client ID:", width=15).pack(side=tk.LEFT)
-        self.entry_id = ttk.Entry(row2)
-        self.entry_id.pack(side=tk.LEFT, fill=tk.X, expand=True)
-
-        # Capture preview
-        self.capture_preview = tk.Label(frm, text="[No preview captured]", relief=tk.SUNKEN, width=40, height=10)
-        self.capture_preview.pack(pady=8)
-
-        # Buttons
-        btns = ttk.Frame(frm)
-        btns.pack(fill=tk.X, pady=4)
-
-        ttk.Button(btns, text="Capture Photo (from camera)", command=self.capture_preview_from_camera).pack(side=tk.LEFT, padx=4)
-        ttk.Button(btns, text="Register Client", command=self.register_client_flow).pack(side=tk.RIGHT, padx=4)
-
-        # Status
-        self.reg_status_var = tk.StringVar(value="")
-        ttk.Label(frm, textvariable=self.reg_status_var).pack(pady=(8,0))
-
-        # internal preview frame
-        self._captured_frame_bgr = None
-
-    def toggle_streaming(self):
-        self.streaming = not self.streaming
-        self.auth_status_var.set("Streaming paused." if not self.streaming else "Streaming...")
-
-    def update_frame(self):
-        """Main GUI loop to update camera frames into the UI using OpenCV only."""
-        try:
-            frame_bgr = self.camera.read_frame()
-        except Exception as e:
-            self.auth_status_var.set(f"Camera error: {e}")
-            return
-
-        # Resize using OpenCV
-        resized = cv2.resize(frame_bgr, (640, 480))
-
-        # Convert BGR → RGB
-        rgb = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
-
-        # Encode to PNG in memory
-        _, buf = cv2.imencode(".png", rgb)
-
-        # Tk-compatible image
-        img = tk.PhotoImage(data=buf.tobytes())
-        self.current_photo_image = img  # prevent garbage collection
-
-        self.auth_canvas.config(image=img)
-
-        # Authentication logic identical to before
-        now = time.time()
-        if self.streaming and not self._overlay_active:
-            if now - self._last_auth_send >= AUTH_SEND_INTERVAL and not self._auth_call_running:
-                self._last_auth_send = now
-                threading.Thread(target=self._auth_call_thread, args=(frame_bgr.copy(),), daemon=True).start()
-
-        self.after(30, self.update_frame)
+# ======================
+# Shared resources
+# ======================
+camera = None
+camera_lock = threading.Lock()
+auth_thread = None
+auth_running = threading.Event()
+ui_queue = queue.Queue()
 
 
-    def _show_overlay(self, text):
-        """Displays overlay text centered on the canvas for DISPLAY_MS_ON_RECOGNIZED ms."""
-        if hasattr(self, "_overlay_label") and self._overlay_label.winfo_exists():
-            self._overlay_label.destroy()
-
-        self._overlay_label = tk.Label(self.auth_frame, text=text, bg="black", fg="white", font=("Arial", 20), bd=2, relief=tk.RIDGE)
-        # place overlay in same location as auth_canvas
-        self._overlay_label.place(in_=self.auth_canvas, relx=0.5, rely=0.1, anchor="n")
-        self._overlay_active = True
-        # Pause streaming while overlay is active (but keep the image display)
-        prev_streaming = self.streaming
-        self.streaming = False
-        # schedule removal
-        self.after(DISPLAY_MS_ON_RECOGNIZED, lambda: self._clear_overlay(prev_streaming))
-
-    def _clear_overlay(self, restore_streaming=True):
-        if hasattr(self, "_overlay_label") and self._overlay_label.winfo_exists():
-            self._overlay_label.destroy()
-        self._overlay_active = False
-        self.streaming = restore_streaming
-        self.auth_status_var.set("Streaming..." if self.streaming else "Streaming paused.")
-
-    def _auth_call_thread(self, frame_bgr):
-        """Background authentication call. Handles displaying recognized info."""
-        self._auth_call_running = True
-        try:
-            resp = self.api.authenticate(frame_bgr)
-        except Exception as e:
-            # network error
-            self.auth_status_var.set(f"Auth request error: {e}")
-            self._auth_call_running = False
-            return
-
-        # Expecting JSON if recognized, otherwise maybe status or different code.
-        recognized = False
-        display_text = None
-        try:
-            if resp.status_code == 200:
-                # Try parse JSON
-                data = resp.json()
-                # Common return shape: {"client_id": "...", "client_name": "..."} OR {"status":"unknown"}.
-                cid = data.get("client_id") or data.get("id") or data.get("clientId")
-                cname = data.get("client_name") or data.get("name") or data.get("clientName")
-                if cid and cname:
-                    recognized = True
-                    display_text = f"Recognized: {cname} ({cid})"
-                else:
-                    # if API returns something else but 200 it's ambiguous; treat as unknown if no fields found
-                    display_text = "Unknown"
-            else:
-                # Not 200 -> treat as unknown or error
-                try:
-                    data = resp.json()
-                    # If the API returns a specific unknown structure like {"status":"unknown"} we handle that
-                    if isinstance(data, dict) and data.get("status") == "unknown":
-                        display_text = "Unknown"
-                    else:
-                        display_text = f"Auth error {resp.status_code}"
-                except Exception:
-                    display_text = f"Auth error {resp.status_code}"
-        except Exception as e:
-            display_text = f"Auth parse error: {e}"
-
-        # Update UI on main thread
-        def ui_update():
-            self.auth_status_var.set(display_text)
-            if recognized:
-                self._show_overlay(display_text)
-        self.after(0, ui_update)
-        self._auth_call_running = False
-
-    # -----------------
-    # Registration flow
-    # -----------------
-    def capture_preview_from_camera(self):
-        try:
-            frame = self.camera.read_frame()
-            self._captured_frame_bgr = frame
-
-            # Resize for preview
-            preview = cv2.resize(frame, (320, 240))
-            preview_rgb = cv2.cvtColor(preview, cv2.COLOR_BGR2RGB)
-            _, buf = cv2.imencode(".png", preview_rgb)
-
-            img = tk.PhotoImage(data=buf.tobytes())
-            self.capture_preview.config(image=img, text="")
-            self.capture_preview.image = img
-
-            self.reg_status_var.set("Preview captured from camera.")
-        except Exception as e:
-            self.reg_status_var.set(f"Capture failed: {e}")
+# ======================
+# Utility helpers
+# ======================
+def encode_frame_to_jpeg_bytes(frame_bgr):
+    ret, buf = cv2.imencode(".jpg", frame_bgr)
+    if not ret:
+        return None
+    return buf.tobytes()
 
 
-    def register_client_flow(self):
-        name = self.entry_name.get().strip()
-        cid = self.entry_id.get().strip()
-        if not name or not cid:
-            messagebox.showwarning("Missing Data", "Please enter both client name and client ID.")
-            return
-        if self._captured_frame_bgr is None:
-            messagebox.showwarning("No Photo", "Please capture a photo from the camera first.")
-            return
-
-        # Disable buttons / show status
-        self.reg_status_var.set("Registering client...")
-        threading.Thread(target=self._register_thread, args=(name, cid, self._captured_frame_bgr.copy()), daemon=True).start()
-
-    def _register_thread(self, name, cid, frame_bgr):
-        try:
-            # 1) register_client
-            resp_reg = self.api.register_client(client_name=name, client_id=cid, frame_bgr=frame_bgr)
-        except Exception as e:
-            self.after(0, lambda: self.reg_status_var.set(f"Register request failed: {e}"))
-            return
-
-        if resp_reg.status_code not in (200, 201):
-            # show server response text if available
-            msg = f"Register failed: {resp_reg.status_code}"
-            try:
-                msg += " - " + resp_reg.text
-            except Exception:
-                pass
-            self.after(0, lambda: self.reg_status_var.set(msg))
-            return
-
-        # 2) process_client_image
-        try:
-            resp_proc = self.api.process_client_image(client_id=cid)
-        except Exception as e:
-            self.after(0, lambda: self.reg_status_var.set(f"Processing request failed: {e}"))
-            return
-
-        if resp_proc.status_code not in (200, 201):
-            msg = f"Process failed: {resp_proc.status_code}"
-            try:
-                msg += " - " + resp_proc.text
-            except Exception:
-                pass
-            self.after(0, lambda: self.reg_status_var.set(msg))
-            return
-
-        # success
-        self.after(0, lambda: self.reg_status_var.set("Client registered and processed successfully."))
-
-    # -----------------
-    # Shutdown
-    # -----------------
-    def on_close(self):
-        # release camera and destroy
-        self.streaming = False
-        try:
-            self.camera.release()
-        except Exception:
-            pass
-        self.destroy()
-
-# -------------------------
-# Entry point
-# -------------------------
-def main():
+# ======================
+# Authentication Loop
+# ======================
+def auth_loop(poll_interval=2.0):
     try:
-        camera = CameraController(index=CAMERA_INDEX)
+        while auth_running.is_set():
+
+            # --- read frame ---
+            with camera_lock:
+                if camera is None or not camera.isOpened():
+                    ui_queue.put(("status", "Camera not opened"))
+                    break
+                ret, frame = camera.read()
+
+            if not ret:
+                ui_queue.put(("status", "Failed to read from camera"))
+                if auth_running.wait(1.0):
+                    break
+                continue
+
+            # --- update live preview ---
+            try:
+                rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                pil_img = Image.fromarray(rgb)
+                ui_queue.put(("frame", pil_img))
+            except Exception as e:
+                ui_queue.put(("status", f"Frame display error: {e}"))
+
+            # --- encode & send to API ---
+            jpeg_bytes = encode_frame_to_jpeg_bytes(frame)
+            if jpeg_bytes:
+                files = {"image1": ("frame.jpg", jpeg_bytes, "image/jpeg")}
+
+                try:
+                    resp = requests.post(AUTH_ENDPOINT, files=files, timeout=10)
+
+                    # response output
+                    try:
+                        text = resp.json()
+                    except:
+                        text = resp.text
+
+                    ui_queue.put(("response", str(text)))
+
+                except Exception as e:
+                    ui_queue.put(("response", f"Auth error: {e}"))
+            else:
+                ui_queue.put(("response", "Failed to encode frame"))
+
+            # Wait
+            if auth_running.wait(poll_interval):
+                break
+
     except Exception as e:
-        tk.messagebox.showerror("Camera Error", f"Unable to start camera: {e}")
+        ui_queue.put(("response", f"Auth loop error: {e}"))
+
+
+# ======================
+# Camera management
+# ======================
+def start_camera(index=0):
+    global camera
+    with camera_lock:
+        if camera is None or not camera.isOpened():
+            cam = cv2.VideoCapture(index)
+            if not cam or not cam.isOpened():
+                return False
+            camera = cam
+    return True
+
+
+def stop_camera():
+    global camera
+    with camera_lock:
+        if camera is not None:
+            try:
+                camera.release()
+            except:
+                pass
+            camera = None
+
+
+# ======================
+# GUI Actions
+# ======================
+def start_authentication():
+    global auth_thread
+    if auth_running.is_set():
         return
 
-    api = ClientAPI()
-    app = GymApp(api=api, camera=camera)
-    app.geometry("700x700")
-    app.mainloop()
+    if not start_camera():
+        messagebox.showerror("Camera Error", "Unable to open webcam.")
+        return
 
-if __name__ == "__main__":
-    main()
+    auth_running.set()
+    auth_thread = threading.Thread(target=auth_loop, daemon=True)
+    auth_thread.start()
+    status_var.set("Authentication started")
+
+
+def stop_authentication():
+    if auth_running.is_set():
+        auth_running.clear()
+        status_var.set("Stopping...")
+    else:
+        status_var.set("Already stopped")
+
+
+def capture_and_register():
+    name = entry_name.get().strip()
+    cid = entry_client_id.get().strip()
+
+    if not name or not cid:
+        messagebox.showerror("Input Error", "Please enter Client Name and Client ID.")
+        return
+
+    if not start_camera():
+        messagebox.showerror("Camera Error", "Cannot open webcam.")
+        return
+
+    # --- capture frame ---
+    with camera_lock:
+        ret, frame = camera.read()
+
+    if not ret:
+        messagebox.showerror("Capture Error", "Failed to capture image.")
+        return
+
+    # --- show frame in UI ---
+    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    pil_img = Image.fromarray(frame_rgb)
+    ui_queue.put(("frame", pil_img))
+
+    jpeg_bytes = encode_frame_to_jpeg_bytes(frame)
+    if jpeg_bytes is None:
+        messagebox.showerror("Encode Error", "Failed to encode frame.")
+        return
+
+    files = {"image1": ("capture.jpg", jpeg_bytes, "image/jpeg")}
+    data = {"client_name": name, "client_id": cid}
+
+    # ================
+    # 1) REGISTER
+    # ================
+    try:
+        resp = requests.post(REGISTER_ENDPOINT, files=files, data=data, timeout=10)
+
+        try:
+            reg_result = resp.json()
+        except:
+            reg_result = resp.text
+
+        ui_queue.put(("response", f"REGISTER RESULT:\n{reg_result}"))
+
+        if resp.status_code != 200:
+            return  # stop if register failed
+
+    except Exception as e:
+        ui_queue.put(("response", f"Register Error: {e}"))
+        return
+
+    # ================
+    # 2) PROCESS IMAGE  (After successful register)
+    # ================
+    try:
+        process_url = PROCESS_ENDPOINT_TEMPLATE.format(client_id=cid)
+        resp2 = requests.post(process_url, files=files, timeout=10)
+
+        try:
+            proc_result = resp2.json()
+        except:
+            proc_result = resp2.text
+
+        ui_queue.put(("response", f"REGISTER RESULT:\n{reg_result}\n\nPROCESS RESULT:\n{proc_result}"))
+
+    except Exception as e:
+        ui_queue.put(("response", f"Process Error: {e}"))
+
+
+# ======================
+# Update UI thread-safely
+# ======================
+def poll_ui_queue():
+    try:
+        while True:
+            kind, payload = ui_queue.get_nowait()
+
+            if kind == "frame":
+                img = payload.copy()
+                img.thumbnail((640, 480))
+                tk_img = ImageTk.PhotoImage(img)
+                lbl_live.imgtk = tk_img
+                lbl_live.config(image=tk_img)
+
+            elif kind == "response":
+                txt_output.delete("1.0", tk.END)
+                txt_output.insert("1.0", payload)
+
+            elif kind == "status":
+                status_var.set(payload)
+
+    except queue.Empty:
+        pass
+
+    root.after(100, poll_ui_queue)
+
+
+# ======================
+# Graceful shutdown
+# ======================
+def on_close():
+    stop_authentication()
+    stop_camera()
+    root.after(200, lambda: (root.destroy(), sys.exit(0)))
+
+
+# ======================
+# Build GUI
+# ======================
+root = tk.Tk()
+root.title("Client System - Webcam Register & Authenticate")
+root.geometry("800x700")
+
+# REGISTER frame
+frame_reg = tk.LabelFrame(root, text="Register Client", padx=10, pady=10)
+frame_reg.pack(fill="x", padx=10, pady=6)
+
+tk.Label(frame_reg, text="Client Name:").grid(row=0, column=0, sticky="w")
+entry_name = tk.Entry(frame_reg, width=30)
+entry_name.grid(row=0, column=1, padx=6, pady=4)
+
+tk.Label(frame_reg, text="Client ID:").grid(row=1, column=0, sticky="w")
+entry_client_id = tk.Entry(frame_reg, width=30)
+entry_client_id.grid(row=1, column=1, padx=6, pady=4)
+
+btn_capture = tk.Button(frame_reg, text="Capture & Register", command=capture_and_register)
+btn_capture.grid(row=2, column=0, columnspan=2, pady=8)
+
+# AUTH frame
+frame_auth = tk.LabelFrame(root, text="Authenticate (Live)", padx=10, pady=10)
+frame_auth.pack(fill="both", expand=False, padx=10, pady=6)
+
+lbl_live = tk.Label(frame_auth, text="No camera feed", bg="black")
+lbl_live.pack(padx=6, pady=6)
+
+controls_frame = tk.Frame(frame_auth)
+controls_frame.pack(fill="x", padx=6, pady=4)
+
+btn_start = tk.Button(controls_frame, text="Start Authentication", command=start_authentication)
+btn_start.pack(side="left", padx=6)
+
+btn_stop = tk.Button(controls_frame, text="Stop Authentication", command=stop_authentication)
+btn_stop.pack(side="left", padx=6)
+
+status_var = tk.StringVar(value="Idle")
+tk.Label(controls_frame, textvariable=status_var).pack(side="left", padx=12)
+
+# OUTPUT frame
+frame_out = tk.LabelFrame(root, text="API Response / Status", padx=10, pady=10)
+frame_out.pack(fill="both", expand=True, padx=10, pady=6)
+
+txt_output = tk.Text(frame_out, height=10)
+txt_output.pack(fill="both", expand=True)
+
+root.after(100, poll_ui_queue)
+root.protocol("WM_DELETE_WINDOW", on_close)
+
+root.mainloop()
