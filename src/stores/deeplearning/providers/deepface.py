@@ -26,7 +26,7 @@ class DeepFaceProvider(ModelInterface):
         
         try:
             out = DeepFace.represent(img_path = image_path, model_name= self.model_name,
-                                    detector_backend = self.detector_backend, align = True)
+                                    detector_backend = self.detector_backend, align = True, enforce_detection=False)
         except Exception as e:
             self.logger.error(f"Error in image embedding: {e}")
             return None

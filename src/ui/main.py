@@ -1,11 +1,9 @@
 import tkinter as tk
-from tkinter import messagebox
 from PIL import Image, ImageTk
 import cv2
 import threading
 import requests
 import queue
-import io
 import time
 
 # ==============================
@@ -19,7 +17,6 @@ AUTH_ENDPOINT = f"{BASE_URL}/authenticate/authenticate"
 # ==============================
 # GLOBAL SHARED OBJECTS
 # ==============================
-camera = None
 camera_running = False
 frame_lock = threading.Lock()
 last_frame = None
@@ -45,7 +42,7 @@ def camera_loop():
         with frame_lock:
             last_frame = frame
 
-        time.sleep(0.01)  # Very small sleep to reduce CPU usage
+        time.sleep(0.01)  # small sleep to reduce CPU usage
 
     cap.release()
 
@@ -144,24 +141,44 @@ class App:
         self.right_frame.grid(row=0, column=1, padx=10, pady=10, sticky="n")
 
         # ===== Camera Preview =====
-        self.preview_label = tk.Label(self.left_frame)
+        self.preview_label = tk.Label(self.left_frame, width=640, height=480, bg="black")
         self.preview_label.pack()
 
         # ===== Form Fields =====
-        tk.Label(self.right_frame, text="Client Name:").pack()
-        self.name_entry = tk.Entry(self.right_frame, width=30)
-        self.name_entry.pack(pady=5)
+        form_frame = tk.Frame(self.right_frame)
+        form_frame.pack(pady=5)
 
-        tk.Label(self.right_frame, text="Client ID:").pack()
-        self.id_entry = tk.Entry(self.right_frame, width=30)
-        self.id_entry.pack(pady=5)
+        tk.Label(form_frame, text="Client Name:").grid(row=0, column=0, sticky="w")
+        self.name_entry = tk.Entry(form_frame, width=30)
+        self.name_entry.grid(row=0, column=1, pady=2)
+
+        tk.Label(form_frame, text="Client ID:").grid(row=1, column=0, sticky="w")
+        self.id_entry = tk.Entry(form_frame, width=30)
+        self.id_entry.grid(row=1, column=1, pady=2)
 
         # ===== Buttons =====
-        tk.Button(self.right_frame, text="Register", width=20,
-                  command=self.on_register).pack(pady=10)
+        button_frame = tk.Frame(self.right_frame)
+        button_frame.pack(pady=10)
 
-        tk.Button(self.right_frame, text="Authenticate", width=20,
-                  command=self.on_authenticate).pack(pady=10)
+        tk.Button(button_frame, text="Register", width=20,
+                  command=self.on_register).grid(row=0, column=0, padx=5, pady=2)
+
+        tk.Button(button_frame, text="Authenticate", width=20,
+                  command=self.on_authenticate).grid(row=1, column=0, padx=5, pady=2)
+
+        # ===== API Response Preview (Scrollable) =====
+        tk.Label(self.right_frame, text="API Response:").pack(pady=(10, 0))
+
+        self.response_text_frame = tk.Frame(self.right_frame)
+        self.response_text_frame.pack(fill="both", expand=True)
+
+        self.response_text = tk.Text(self.response_text_frame, width=50, height=15, wrap="word")
+        self.response_text.pack(side="left", fill="both", expand=True)
+
+        self.scrollbar = tk.Scrollbar(self.response_text_frame, command=self.response_text.yview)
+        self.scrollbar.pack(side="right", fill="y")
+
+        self.response_text.config(yscrollcommand=self.scrollbar.set, state=tk.DISABLED)
 
         # Start camera thread
         threading.Thread(target=camera_loop, daemon=True).start()
@@ -174,16 +191,23 @@ class App:
         name = self.name_entry.get().strip()
         client_id = self.id_entry.get().strip()
         if not name or not client_id:
-            messagebox.showerror("Error", "Please enter name + ID")
+            self.show_response("Error: Please enter name + ID")
             return
         run_api_thread(register_client, name, client_id)
 
     def on_authenticate(self):
         client_id = self.id_entry.get().strip()
         if not client_id:
-            messagebox.showerror("Error", "Enter Client ID")
+            self.show_response("Error: Enter Client ID")
             return
         run_api_thread(authenticate_client, client_id)
+
+    # ---- SHOW RESPONSE ----
+    def show_response(self, msg):
+        self.response_text.config(state=tk.NORMAL)
+        self.response_text.insert(tk.END, msg + "\n")
+        self.response_text.see(tk.END)
+        self.response_text.config(state=tk.DISABLED)
 
     # ---- UI LOOP ----
     def update_ui(self):
@@ -202,9 +226,9 @@ class App:
             while True:
                 key, msg = ui_queue.get_nowait()
                 if key == "error":
-                    messagebox.showerror("Error", msg)
+                    self.show_response(f"Error: {msg}")
                 elif key == "info":
-                    messagebox.showinfo("Success", msg)
+                    self.show_response(f"Success: {msg}")
         except queue.Empty:
             pass
 
@@ -219,5 +243,4 @@ if __name__ == "__main__":
     root = tk.Tk()
     app = App(root)
     root.mainloop()
-
     camera_running = False
