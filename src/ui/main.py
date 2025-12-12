@@ -237,10 +237,6 @@ class App:
         # Run again
         self.root.after(10, self.update_ui)
 
-
-# ==============================
-# MAIN
-# ==============================
 if __name__ == "__main__":
     root = tk.Tk()
     app = App(root)

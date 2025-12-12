@@ -32,6 +32,9 @@ async def authenticate_client(request: Request, image1: UploadFile =  File(...))
     face_model_client = request.app.face_model_client
     vector_db_client = request.app.vector_db_client
     
+    #loading firebase client
+    firebase_client = request.app.firebase_client
+    
     embedding_controller = EmbeddingController(vector_db_client=vector_db_client,
                                                embedding_client=face_model_client)
     
@@ -52,10 +55,11 @@ async def authenticate_client(request: Request, image1: UploadFile =  File(...))
     meta_data =  record.meta_data
     
     if score >= 0.40:
+        firebase_client.update_value(value = 1)
         return JSONResponse(content={"repsonse signal" : ResponseSignal.CLEINT_AUTHENTICATION_SUCCEED.value,
                                  "Client ID": meta_data['client_id'],
                                  "Client_name": meta_data["client_name"]})
-    
+    firebase_client.update_value(value = 0)
     return JSONResponse(content={"repsonse signal" : ResponseSignal.CLEINT_AUTHENTICATION_FAIL.value})
     
     

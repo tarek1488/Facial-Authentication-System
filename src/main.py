@@ -5,6 +5,7 @@ from helpers.config import get_settings
 from motor.motor_asyncio import AsyncIOMotorClient
 from stores.vectordb.VectorDBFactory import VectorDBFactory
 from stores.deeplearning.ModelFactory import ModelProviderFactory
+from stores import Firebase
 async def lifespan(app: FastAPI):
     # Getting the enviroments settings
     settings = get_settings()
@@ -30,6 +31,10 @@ async def lifespan(app: FastAPI):
     
     # connect to vector db client 
     app.vector_db_client.connect()
+    
+    #connect to firebase 
+    app.firebase_client = Firebase(config= settings)
+    app.firebase_client.connect()
     
     yield
     # disconnect all connections
