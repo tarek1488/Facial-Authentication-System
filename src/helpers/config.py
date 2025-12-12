@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     QDRANT_URL:str = None
     COLLECTION_NAME: str = None
     
+    CREDENTIALS_PATH: str = None
+    DATABASE_URL: str = None
+    
     class Config:
         env_file = ".env"
         
