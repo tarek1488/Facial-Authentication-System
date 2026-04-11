@@ -6,10 +6,11 @@ This project implements a comprehensive facial registration and authentication s
 
 - **Real-Time Facial Registration**: Users can register by providing their name and an ID. The UI visually captures their face and sends it for processing.
 - **Continuous Facial Authentication**: The front-end automatically captures and authenticates users via their camera feed in a background thread every 5 seconds.
-- **Advanced Deep Learning Pipeline**: Utilizes **DeepFace** with Keras/TensorFlow for high-quality facial representations (`Facenet512` by default) and SSD for face detection.
-- **Vector Search Engine**: Face embeddings are securely indexed and efficiently compared using **Qdrant** Vector DB.
-- **Data Stores**: Uses **MongoDB** for persistent storage of user records and configuration, and optionally integrates with Firebase.
-- **Containerization**: Database services (MongoDB and Qdrant) are containerized with Docker and Docker Compose for a seamless setup experience.
+- **Advanced Deep Learning Pipeline**: Utilizes **DeepFace** with Keras/TensorFlow for high-quality facial representations (`Facenet512` by default, 512-dim embeddings) and SSD for face detection.
+- **Vector Search Engine**: Face embeddings are indexed and compared using **Qdrant** with cosine similarity; a match threshold of `0.40` gates authentication.
+- **Data Stores**: **MongoDB** (via Motor async client) persists client records; **Qdrant** stores embeddings; **Firebase Realtime DB** receives the live authentication status (`/Status` = `1` on success, `0` on failure).
+- **Full Containerization**: The FastAPI backend, MongoDB, and Qdrant all run via Docker Compose — a single `docker-compose up` brings up the entire stack.
+- **Factory/Provider Architecture**: Embedding model and vector DB are pluggable via factory + interface patterns (`stores/deeplearning`, `stores/vectordb`), so providers can be swapped without touching the controllers.
 
 ## Technology Stack
 
@@ -31,42 +32,83 @@ Before running this project, ensure you have the following installed:
 
 ```
 .
+├── Dockerfile                   # Image for the FastAPI backend (python:3.11-slim + uv)
 ├── docker/
-│   ├── docker-compose.yml       # Docker services for MongoDB and Qdrant
-│   └── .env                     # Docker environment variables
+│   ├── docker-compose.yml       # App + MongoDB + Qdrant services
+│   └── .env                     # Docker environment variables (Mongo credentials)
 ├── src/
-│   ├── main.py                  # Entry point for the FastAPI backend application
-│   ├── requirements.txt         # Project pip dependencies
+│   ├── main.py                  # FastAPI entry point; lifespan wires up all clients
+│   ├── requirements.txt         # Python dependencies
 │   ├── .env                     # Backend configuration variables
-│   ├── assets/                  # Directory for ML models
-│   ├── controllers/             # Business logic & resource handling
-│   ├── models/                  # Pydantic / database models
-│   ├── routes/                  # API endpoints definition
-│   ├── stores/                  # Database connections (Firebase, VectorDB, DeepLearning)
+│   ├── assets/                  # DeepFace model cache (DEEPFACE_HOME)
+│   ├── helpers/
+│   │   └── config.py            # pydantic-settings Settings loader
+│   ├── controllers/             # ImageController, EmbeddingController, ClientController
+│   ├── models/
+│   │   ├── db_schemes/          # Pydantic MongoDB schemas (Client)
+│   │   ├── ClientDataModel.py   # Async Motor data access layer
+│   │   └── enums/               # ResponseSignal string constants
+│   ├── routes/                  # base.py (health), user.py (register), authenticate.py
+│   ├── stores/
+│   │   ├── deeplearning/        # Factory + providers/deepface.py
+│   │   ├── vectordb/            # Factory + providers/qdrant.py
+│   │   └── firebase/Firebase.py # Firebase Admin SDK wrapper
 │   └── ui/
-│       └── main.py              # Tkinter Client desktop application
-└── README.md                    # Project documentation
+│       └── main.py              # Tkinter desktop client
+└── README.md
 ```
 
+## Architecture & Data Flow
+
+**Registration**
+1. UI captures a webcam frame and POSTs it to `/api/v1/client/register_client` — the backend saves the image and writes a client record to MongoDB.
+2. UI then calls `/api/v1/client/proccess_client_image/{client_id}` — DeepFace (`Facenet512`) generates a 512-dim embedding, which is upserted into Qdrant.
+
+**Authentication**
+1. The Tkinter client auto-captures a frame every 5 seconds and POSTs it to `/api/v1/authenticate/authenticate`.
+2. The backend embeds the frame, runs a cosine similarity search in Qdrant, and if the top score ≥ `0.40` it considers the client authenticated.
+3. On success, the backend writes `Status = 1` to Firebase Realtime DB (`0` on failure). The top match's `client_id` and `client_name` are returned in the JSON response.
+
+The FastAPI `lifespan` in `src/main.py` eagerly initializes every external client (MongoDB, Qdrant, DeepFace model, Firebase) at startup and attaches them to `app.state`, so request handlers can pull ready-to-use clients via `request.app.*`.
+
 ## Setup & Installation
+
+You have two options: run the **whole stack in Docker** (recommended), or run the backend locally and use Docker only for MongoDB + Qdrant.
 
 ### 1. Clone the Repository
 
 ```bash
-git clone <repository_url>
-cd <repository_name>
+git clone https://github.com/tarek1488/Facial-Authentication-System.git
+cd Facial-Authentication-System
 ```
 
-### 2. Start the Database Services
+### Option A — Run everything in Docker (recommended)
 
-Navigate to the `docker` directory and bring up the database containers:
+The `docker/docker-compose.yml` builds the backend image from the root `Dockerfile` and starts `face_auth_app`, `mongodb`, and `qdrant` on a shared `backend` network.
 
 ```bash
 cd docker
-docker-compose up -d
+docker-compose up -d --build
+```
+
+Requirements before running:
+- Populate `docker/.env` with `MONGO_INITDB_ROOT_USERNAME` / `MONGO_INITDB_ROOT_PASSWORD`.
+- Place your Firebase service account JSON at `src/stores/firebase/credentials/firebase_credentials.json` — the compose file mounts that directory read-only into `/app/credentials`.
+- The backend expects DeepFace models to be cached under `src/assets/models` (mounted into the container at `/app/assets`). On first run, DeepFace will download them if absent.
+
+The API will be available at http://localhost:5000/docs. MongoDB is exposed on `27007` and Qdrant on `6333` / `6334`.
+
+The Tkinter desktop client is **not** containerized (it needs host webcam + display access); follow Option B's venv steps to run it against the dockerized backend.
+
+### Option B — Local backend, Dockerized databases
+
+Start only the DB services (you can run compose with the `mongodb` and `qdrant` services, or comment out the `app` service temporarily):
+
+```bash
+cd docker
+docker-compose up -d mongodb qdrant
 cd ..
 ```
-*Note: Make sure your `docker/.env` has `MONGO_INITDB_ROOT_USERNAME` and `MONGO_INITDB_ROOT_PASSWORD` populated if configured.*
 
 ### 3. Create a Virtual Environment and Install Dependencies
 
