@@ -40,14 +40,14 @@ async def authenticate_client(request: Request, image1: UploadFile =  File(...))
     
     vector = embedding_controller.get_frame_query_embeddeing(image=numpy_image)
     
-    if vector == None:
+    if vector is None:
         logger.error("error in embedding camera frame")
         return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST,
                             content={"response signal" : ResponseSignal.IMAGE_EMBEDDING_FAIL.value})
         
     # now we have a vector---> search database
     records = embedding_controller.search_data_base(vector=vector)
-    if records == None:
+    if records is None:
         return JSONResponse(content={"repsonse signal" : ResponseSignal.CLEINT_AUTHENTICATION_FAIL.value})
         
     record = records[0]

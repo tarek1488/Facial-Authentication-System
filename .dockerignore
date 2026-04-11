@@ -1,0 +1,12 @@
+.git
+.gitignore
+.venv
+**/__pycache__
+**/*.pyc
+docker
+README.md
+CLAUDE.md
+src/ui
+src/assets/models
+src/assets/Clients
+src/stores/firebase/credentials

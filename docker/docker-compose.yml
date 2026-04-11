@@ -1,4 +1,34 @@
 services:
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+
+    container_name: face_auth_app
+
+    ports:
+      - "5000:5000"
+
+    environment:
+      - MONGO_DB_URL=mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@mongodb:27017
+      - MONGO_DB_DATABASE=FacialAuthentication
+      - QDRANT_URL=http://qdrant:6333
+      - DEEPFACE_HOME=/app/assets/models
+      - CREDENTIALS_PATH=/app/credentials/firebase_credentials.json
+
+    volumes:
+      - ../src/assets:/app/assets
+      - ../src/stores/firebase/credentials:/app/credentials:ro
+
+    depends_on:
+      - mongodb
+      - qdrant
+
+    networks:
+      - backend
+
+    restart: unless-stopped
+
   mongodb:
     image: mongo:7.0-jammy
     

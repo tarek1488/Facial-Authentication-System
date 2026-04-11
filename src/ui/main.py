@@ -89,7 +89,7 @@ def register_client(client_name, client_id):
         if resp.status_code == 200:
             # After successful register → call process endpoint
             process_endpoint = PROCESS_ENDPOINT_TEMPLATE.format(client_id=client_id)
-            resp2 = requests.post(process_endpoint, files=files, timeout=15)
+            resp2 = requests.post(process_endpoint, timeout=30)
 
             if resp2.status_code == 200:
                 ui_queue.put(("info", "Registration + Processing completed successfully!"))

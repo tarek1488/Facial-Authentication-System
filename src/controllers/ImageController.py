@@ -27,12 +27,12 @@ class ImageController(BaseController):
         
         
         new_unique_file_path = os.path.join(client_diectory, random_file_name + "_" + clean_file_name)
-        
-        
+
+
         while os.path.exists(new_unique_file_path):
-            random_file_name = self.generate_unique_file_name
-            new_unique_file_path = os.path.join(clean_file_name, random_file_name + "_" + clean_file_name)
-        
+            random_file_name = self.generate_random_string()
+            new_unique_file_path = os.path.join(client_diectory, random_file_name + "_" + clean_file_name)
+
         return new_unique_file_path, random_file_name + "_" + clean_file_name
         
         
@@ -47,9 +47,9 @@ class ImageController(BaseController):
     def read_frame(self, file: UploadFile):
         file_bytes = np.frombuffer(file.file.read(), np.uint8)
         img = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        
+
         if img is None:
             return None
-        
-        return img 
+
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        return img

@@ -31,9 +31,9 @@ class DeepFaceProvider(ModelInterface):
             self.logger.error(f"Error in image embedding: {e}")
             return None
         
-        if len(out) == 0 or out == None or out[0]["embedding"] == None:
+        if out is None or len(out) == 0 or out[0].get("embedding") is None:
             return None
-        
+
         vector = out[0]["embedding"]
         return vector
         

@@ -30,11 +30,11 @@ class EmbeddingController(BaseController):
     
     def get_frame_query_embeddeing(self, image: NDArray[np.uint8] ):
         vector =  self.embedding_client.embed_image(image_path = image)
-        
-        if vector != None:
-            return vector
-        
-        return None
+
+        if vector is None:
+            return None
+
+        return vector
     
     def search_data_base(self, vector: list, limit:int  = 1):
         collection_name =  self.app_settings.COLLECTION_NAME

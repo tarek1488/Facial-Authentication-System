@@ -21,7 +21,7 @@ class Firebase:
     def disconnect(self):
         delete_app(self.app)
     
-    def update_value(self, value: bool):
+    def update_value(self, value: int):
         try:
             db.reference("/").update({"Status": value})
             self.logger.info("Data updated successfully in Firebase")

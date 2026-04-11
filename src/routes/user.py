@@ -35,17 +35,7 @@ async def register_client(
     
     
     client_data_model = await ClientDataModel.initialize_client_model(db_client=db_client)
-    
-    try:
-        client_record = await client_data_model.create_client(client= Client(client_name= client_name,
-                                                                   client_id= client_id,
-                                                                   client_image_path= image_path) )
-    except Exception as e:
-        logger.error(f'Client database insersion error: {e}')
-        return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST,
-                            content={"response signal" : ResponseSignal.CLIENT_ADD_FAIL.value})
-        
-    
+
     try:
         async with aiofiles.open(image_path, 'wb') as f:
             while chunk := await image1.read(app_settings.IMAGE_CHUNK_SIZE):
@@ -54,6 +44,19 @@ async def register_client(
         logger.error(f'Client image upload error: {e}')
         return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST,
                             content={"response signal" : ResponseSignal.IMAGE_READ_FAIL.value})
+
+    try:
+        client_record = await client_data_model.create_client(client= Client(client_name= client_name,
+                                                                   client_id= client_id,
+                                                                   client_image_path= image_path) )
+    except Exception as e:
+        logger.error(f'Client database insersion error: {e}')
+        try:
+            os.remove(image_path)
+        except OSError:
+            pass
+        return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST,
+                            content={"response signal" : ResponseSignal.CLIENT_ADD_FAIL.value})
     
     
     
