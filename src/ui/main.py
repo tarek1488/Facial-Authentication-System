@@ -84,7 +84,7 @@ def register_client(client_name, client_id):
         files = {"image1": ("image.jpg", frame_bytes, "image/jpeg")}
         data = {"client_name": client_name, "client_id": client_id}
 
-        resp = requests.post(REGISTER_ENDPOINT, files=files, data=data, timeout=15)
+        resp = requests.post(REGISTER_ENDPOINT, files=files, data=data, timeout=30)
 
         if resp.status_code == 200:
             # After successful register → call process endpoint
@@ -115,7 +115,7 @@ def authenticate_client(client_id):
         files = {"image1": ("image.jpg", frame_bytes, "image/jpeg")}
         data = {"client_id": client_id}
 
-        resp = requests.post(AUTH_ENDPOINT, files=files, data=data, timeout=15)
+        resp = requests.post(AUTH_ENDPOINT, files=files, data=data, timeout=60)
 
         if resp.status_code == 200:
             ui_queue.put(("info", f"Authenticated Successfully: {resp.text}"))
